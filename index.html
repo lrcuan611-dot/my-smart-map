@@ -1,433 +1,294 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <title>我的智能导图助手</title>
-  <style>
-    :root { --bg: #f0f9f0; --sidebar: #ffffff; --primary: #2e7d32; --accent: #81c784; }
-    body {
-      margin: 0;
-      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: var(--bg);
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lrc_sakura</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --bg: #e8f0e8; --primary: #5c8d89; --shadow-light: #ffffff; --shadow-dark: #c3d0c3; --text: #4a5c4a; --add-bg: #dff4df; --add-text: #1f6d1f; --del-bg: #f9dfdf; --del-text: #922727; }
+        
+        body { background: var(--bg); margin: 0; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--text); -webkit-tap-highlight-color: transparent; }
+        
+        /* 响应式核心布局 */
+        .app-container { display: flex; min-height: 100vh; max-width: 1400px; margin: 0 auto; padding: 20px; gap: 20px; box-sizing: border-box; }
+        
+        /* 侧边栏样式 */
+        .sidebar { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
+        .neu-card { background: var(--bg); border-radius: 25px; box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light); padding: 20px; position: relative; }
+        
+        .nav-menu { list-style: none; padding: 0; margin: 0; }
+        .nav-menu li { padding: 15px; border-radius: 15px; margin-bottom: 10px; cursor: pointer; text-align: center; font-weight: bold; transition: 0.2s; }
+        .nav-menu li.active { box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light); color: var(--primary); }
 
-    /* 左侧历史列表 */
-    #history-sidebar {
-      width: 220px;
-      background: var(--sidebar);
-      border-right: 1px solid #c8e6c9;
-      display: flex;
-      flex-direction: column;
-      z-index: 10;
-    }
-    .history-header { padding: 20px; border-bottom: 1px solid #e8f5e9; }
-    #history-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
-    .history-item {
-      padding: 12px 15px;
-      cursor: pointer;
-      border-bottom: 1px solid #f1f8e9;
-      font-size: 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: 0.3s;
-    }
-    .history-item:hover { background: #f1f8e9; }
-    .history-item.active { background: #e8f5e9; border-left: 5px solid var(--primary); font-weight: bold; }
-    .delete-btn { color: #ccc; font-size: 18px; opacity: 0; transition: 0.2s; }
-    .history-item:hover .delete-btn { opacity: 1; }
+        /* 内容区控制 */
+        .main-content { flex: 1; min-width: 0; }
+        .page { display: none; }
+        .page.active { display: block; animation: fadeIn 0.4s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-    /* 编辑区：行号 + textarea */
-    #editor-container {
-      width: 35%;
-      background: #fff;
-      border-right: 1px solid #c8e6c9;
-      display: flex;
-      position: relative;
-      min-width: 320px;
-    }
-    #line-numbers {
-      width: 74px;
-      background: #fafafa;
-      border-right: 1px solid #eee;
-      padding: 20px 8px 20px 10px;
-      text-align: right;
-      color: #999;
-      font-family: Consolas, "Courier New", monospace;
-      font-size: 13px;
-      line-height: 1.6;
-      user-select: none;
-      overflow: hidden;
-      white-space: pre;
-      box-sizing: border-box;
-    }
-    textarea {
-      flex: 1;
-      padding: 20px 16px;
-      border: 0;
-      outline: none;
-      resize: none;
-      font-size: 15px;
-      line-height: 1.6;
-      color: #2e3b2e;
-      font-family: Consolas, "Courier New", monospace;
-      tab-size: 2;
-      overflow: auto;
-      box-sizing: border-box;
-    }
+        /* 时钟背景区 */
+        .hero-clock { height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 30px; color: white; text-shadow: 2px 2px 8px rgba(0,0,0,0.6); position: relative; overflow: hidden; background-size: cover; background-position: center; }
+        #big-time { font-size: 5rem; font-weight: 900; margin: 0; z-index: 1; }
+        .change-bg-btn { position: absolute; top: 15px; right: 15px; font-size: 12px; padding: 5px 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; cursor: pointer; backdrop-filter: blur(5px); }
 
-    /* 右侧导图区 */
-    #viewer { flex: 1; background: var(--bg); position: relative; }
-    #viewer svg { width: 100%; height: 100%; }
+        /* 日历 */
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 15px; }
+        .cal-day { padding: 12px 5px; text-align: center; border-radius: 12px; cursor: pointer; box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light); position: relative; font-weight: bold; }
+        .cal-day.has-note::after { content: ''; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; background: var(--primary); border-radius: 50%; }
 
-    .controls {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      display: flex;
-      gap: 10px;
-      z-index: 5;
-    }
+        /* 文章显示与对比 */
+        .article-view-content { background: white; padding: 25px; border-radius: 20px; line-height: 2; font-size: 17px; white-space: pre-wrap; box-shadow: inset 2px 2px 5px var(--shadow-dark); }
+        .diff-add { background-color: var(--add-bg); color: var(--add-text); }
+        .diff-del { background-color: var(--del-bg); color: var(--del-text); text-decoration: line-through; }
+        .split-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
+        .edit-box { width: 100%; height: 400px; padding: 20px; border-radius: 20px; border: none; background: var(--bg); box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light); outline: none; font-size: 16px; line-height: 1.8; resize: none; box-sizing: border-box; }
+        .neu-btn { background: var(--bg); border: none; border-radius: 12px; box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light); padding: 10px 20px; color: var(--primary); font-weight: bold; cursor: pointer; }
 
-    .btn {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: 0.2s;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .btn-new { background: var(--primary); color: white; width: 100%; }
-    .btn-tool { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
-
-    /* 节点旁按钮样式（foreignObject 内 HTML） */
-    .mm-node-action-btn {
-      font-size: 11px;
-      line-height: 1;
-      padding: 2px 6px;
-      border: 1px solid #81c784;
-      border-radius: 4px;
-      background: #fff;
-      color: #2e7d32;
-      cursor: pointer;
-    }
-    .mm-node-action-btn:hover {
-      background: #f1f8e9;
-    }
-  </style>
+        /* ================= 📱 手机端适配 (关键优化) ================= */
+        @media (max-width: 768px) {
+            .app-container { flex-direction: column; padding: 10px; gap: 15px; }
+            .sidebar { width: 100%; }
+            .sidebar .neu-card:first-child { display: flex; align-items: center; gap: 15px; padding: 15px; }
+            .sidebar .neu-card:first-child div:first-child { width: 50px !important; height: 50px !important; margin: 0 !important; }
+            .nav-menu { display: flex; gap: 10px; }
+            .nav-menu li { flex: 1; margin-bottom: 0; padding: 10px 5px; font-size: 14px; }
+            #big-time { font-size: 3.5rem; }
+            .hero-clock { height: 200px; }
+            .split-edit { grid-template-columns: 1fr; }
+            .edit-box { height: 300px; }
+        }
+    </style>
 </head>
 <body>
-  <div id="history-sidebar">
-    <div class="history-header">
-      <button class="btn btn-new" onclick="createNew()">+ 开启新任务</button>
+
+<div class="app-container">
+    <div class="sidebar">
+        <div class="neu-card">
+            <div style="width:70px; height:70px; background: url('https://api.dicebear.com/7.x/notionists/svg?seed=Lrc_sakura') center/cover; border-radius:50%; margin: 0 auto 10px; box-shadow: 4px 4px 8px var(--shadow-dark);"></div>
+            <div style="text-align: center;">
+                <h3 style="margin:0;">Lrc_sakura</h3>
+                <span id="conn-tag" style="font-size:11px; color:orange;">🟡 同步中...</span>
+            </div>
+        </div>
+        <div class="neu-card" style="padding:10px;">
+            <ul class="nav-menu">
+                <li class="active" onclick="showP('home', this)">🏠 首页</li>
+                <li onclick="showP('list', this)">📖 练习</li>
+                <li onclick="showP('album', this)">📷 相册</li>
+            </ul>
+        </div>
     </div>
-    <ul id="history-list"></ul>
-  </div>
 
-  <div id="editor-container">
-    <div id="line-numbers"></div>
-    <textarea id="md" placeholder="输入内容...&#10;按回车自动对齐缩进&#10;空格决定分支层级"></textarea>
-  </div>
+    <div class="main-content">
+        <div id="p-home" class="page active">
+            <div class="hero-clock" id="clock-bg" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1000');">
+                <button class="change-bg-btn" onclick="changeClockBg()">📷 换背景</button>
+                <h1 id="big-time">00:00</h1>
+                <p id="big-date">加载中...</p>
+            </div>
+            <div class="neu-card" style="margin-top:20px;">
+                <h3 style="margin-top:0;">📅 联络日程</h3>
+                <div class="cal-grid" id="cal-grid"></div>
+            </div>
+        </div>
 
-  <div id="viewer">
-    <svg id="markmap"></svg>
-    <div class="controls">
-      <button class="btn btn-tool" onclick="mm && mm.fit()">🔍 自适应视角</button>
-      <button class="btn btn-tool" onclick="downloadImage()">📸 保存截图</button>
+        <div id="p-list" class="page">
+            <div class="neu-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0;">练习记录</h2>
+                    <button class="neu-btn" onclick="startNewArticle()">＋ 新增练习</button>
+                </div>
+                <div id="article-list-area" style="margin-top:20px;"></div>
+            </div>
+        </div>
+
+        <div id="p-view" class="page">
+            <div class="neu-card">
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <button class="neu-btn" onclick="showP('list')">⬅ 返回</button>
+                    <button class="neu-btn" onclick="goEdit()" style="color:var(--primary)">✍ 修改对照</button>
+                </div>
+                <h2 id="v-title" style="margin:10px 0;"></h2>
+                <div id="v-diff-content" class="article-view-content"></div>
+            </div>
+        </div>
+
+        <div id="p-edit" class="page">
+            <div class="neu-card">
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <button class="neu-btn" onclick="showP('view')">取消</button>
+                    <button class="neu-btn" onclick="submitArticle()">💾 保存云端</button>
+                </div>
+                <input type="text" id="e-title" placeholder="练习标题" style="width:100%; padding:15px; border-radius:15px; border:none; background:var(--bg); box-shadow:inset 2px 2px 5px var(--shadow-dark); margin-bottom:15px; font-size:1.1rem; outline:none; box-sizing: border-box;">
+                <div class="split-edit">
+                    <div><p style="margin:5px 0;">✍ 原文 (A)</p><textarea id="e-orig" class="edit-box"></textarea></div>
+                    <div><p style="margin:5px 0;">✅ 修改文 (B)</p><textarea id="e-corr" class="edit-box" placeholder="请在这里进行修改..."></textarea></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="p-album" class="page">
+             <div class="neu-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0;">照片墙</h2>
+                    <button class="neu-btn" onclick="document.getElementById('img-up').click()">📷 上传</button>
+                    <input type="file" id="img-up" hidden multiple onchange="doUpload(this)">
+                </div>
+                <div id="album-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:15px; margin-top:20px;"></div>
+            </div>
+        </div>
     </div>
-  </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
-
-  <script>
-    const { Transformer, Markmap } = window.markmap;
-    const transformer = new Transformer();
-
-    const mdEl = document.getElementById('md');
-    const lineNoEl = document.getElementById('line-numbers');
-
-    let mm = null;
-    let currentId = null;
-    let maps = JSON.parse(localStorage.getItem('my_maps') || '[]');
-
-    function saveToLocal() {
-      localStorage.setItem('my_maps', JSON.stringify(maps));
-    }
-
-    // 回车自动继承当前行缩进
-    mdEl.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-
-      const start = mdEl.selectionStart;
-      const end = mdEl.selectionEnd;
-      const text = mdEl.value;
-
-      const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-      const currentLine = text.slice(lineStart, start);
-      const indent = (currentLine.match(/^\s*/) || [''])[0];
-
-      e.preventDefault();
-      mdEl.setRangeText('\n' + indent, start, end, 'end');
-      render();
-    });
-
-    // 行号：按缩进层级编号（1 / 1.1 / 2 ...）
-    function updateLineNumbers(text) {
-      const lines = text.split('\n');
-      const counters = [];
-      const out = [];
-
-      for (const line of lines) {
-        const content = line.trim();
-        if (!content) {
-          out.push('');
-          continue;
-        }
-
-        const indent = (line.match(/^\s*/) || [''])[0].length;
-        const level = Math.floor(indent / 2);
-
-        counters[level] = (counters[level] || 0) + 1;
-        counters.length = level + 1;
-
-        out.push(counters.join('.'));
-      }
-
-      lineNoEl.textContent = out.join('\n');
-    }
-
-    function formatText(text) {
-      return text.split('\n').map(line => {
-        const indent = (line.match(/^\s*/) || [''])[0].length;
-        const content = line.trim();
-        if (!content) return '';
-        return '#'.repeat(Math.floor(indent / 2) + 1) + ' ' + content;
-      }).join('\n');
-    }
-
-    function getLineMeta(text) {
-      return text.split('\n').map((line, idx) => {
-        const indent = (line.match(/^\s*/) || [''])[0].length;
-        return {
-          lineNumber: idx + 1,  // 1-based
-          indent,
-          level: Math.floor(indent / 2),
-          content: line.trim()
-        };
-      });
-    }
-
-    function getNodeContent(d) {
-      return (
-        d?.data?.content ??
-        d?.content ??
-        d?.payload?.data?.content ??
-        ''
-      );
-    }
-
-    function getNodeDepth(d) {
-      return (
-        d?.depth ??
-        d?.data?.depth ??
-        d?.payload?.depth ??
-        0
-      );
-    }
-
-    function buildLinePoolByKey(rawText) {
-      const pool = new Map();
-      const meta = getLineMeta(rawText);
-
-      meta.forEach(item => {
-        if (!item.content) return;
-        const key = `${item.level}||${item.content}`;
-        if (!pool.has(key)) pool.set(key, []);
-        pool.get(key).push(item);
-      });
-
-      return pool;
-    }
-
-    // 在指定行下方插入新行，并触发重渲染 + 自动保存
-    function insertLineBelow(baseLineNumber, indentSpaces) {
-      const lines = mdEl.value.split('\n');
-      const safeLine = Math.max(1, Math.min(baseLineNumber, lines.length));
-      const insertAt = safeLine; // 插在当前行后面
-      const newLine = ' '.repeat(Math.max(0, indentSpaces));
-
-      lines.splice(insertAt, 0, newLine);
-      mdEl.value = lines.join('\n');
-
-      // 把光标放到新插入行末尾
-      let pos = 0;
-      for (let i = 0; i < insertAt; i++) pos += lines[i].length + 1;
-      pos += newLine.length;
-      mdEl.focus();
-      mdEl.selectionStart = mdEl.selectionEnd = pos;
-
-      render();
-    }
-
-    // 给每个节点挂“+子 / +同”按钮
-    function mountNodeActionButtons(rawText) {
-      if (!mm) return;
-
-      const svg = d3.select('#markmap');
-      svg.selectAll('.mm-inline-actions').remove();
-
-      const linePool = buildLinePoolByKey(rawText);
-      const consumeIndex = new Map();
-
-      // 兼容不同版本 markmap 的节点类名
-      const nodes = svg.selectAll('g.markmap-node, g.node');
-
-      nodes.each(function(d) {
-        const content = String(getNodeContent(d)).trim();
-        if (!content) return;
-
-        const depth = getNodeDepth(d);
-        const key = `${depth}||${content}`;
-        const list = linePool.get(key) || [];
-        const idx = consumeIndex.get(key) || 0;
-        const picked = list[idx] || null;
-        consumeIndex.set(key, idx + 1);
-
-        if (!picked) return;
-
-        const g = d3.select(this);
-        const fo = g.append('foreignObject')
-          .attr('class', 'mm-inline-actions')
-          .attr('x', 10)
-          .attr('y', -11)
-          .attr('width', 86)
-          .attr('height', 24);
-
-        const host = fo.append('xhtml:div')
-          .style('display', 'flex')
-          .style('gap', '4px')
-          .style('pointer-events', 'all');
-
-        const addBtn = (label, onClick) => {
-          const btn = host.append('xhtml:button')
-            .attr('class', 'mm-node-action-btn')
-            .text(label);
-
-          btn.on('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onClick();
-          });
-        };
-
-        // 子节点：下方插入，缩进 +2
-        addBtn('+子', () => {
-          // 可在控制台查看对应行号
-          console.log('child insert from line:', picked.lineNumber);
-          insertLineBelow(picked.lineNumber, picked.indent + 2);
-        });
-
-        // 同级节点：下方插入，缩进不变
-        addBtn('+同', () => {
-          console.log('sibling insert from line:', picked.lineNumber);
-          insertLineBelow(picked.lineNumber, picked.indent);
-        });
-      });
-    }
-
-    function render() {
-      const rawText = mdEl.value;
-      updateLineNumbers(rawText);
-
-      const markdown = formatText(rawText || '新任务');
-      const { root } = transformer.transform(markdown);
-
-      if (!mm) {
-        mm = Markmap.create('#markmap', { autoFit: true }, root);
-      } else {
-        mm.setData(root);
-        mm.fit();
-      }
-
-      // 等本轮节点绘制完成后再挂按钮
-      requestAnimationFrame(() => mountNodeActionButtons(rawText));
-
-      // 自动保存 + 历史刷新（保留原逻辑）
-      if (currentId) {
-        const target = maps.find(m => m.id === currentId);
-        if (target) {
-          target.content = rawText;
-          target.title = rawText.split('\n')[0].substring(0, 12) || '未命名任务';
-          saveToLocal();
-          refreshList();
-        }
-      }
-    }
-
-    function createNew() {
-      const newMap = { id: Date.now(), title: '新任务', content: '' };
-      maps.unshift(newMap);
-      currentId = newMap.id;
-      mdEl.value = '';
-      saveToLocal();
-      refreshList();
-      render();
-      mdEl.focus();
-    }
-
-    function loadMap(id) {
-      currentId = id;
-      const target = maps.find(m => m.id === id);
-      mdEl.value = target ? target.content : '';
-      refreshList();
-      render();
-    }
-
-    function deleteMap(e, id) {
-      e.stopPropagation();
-      if (!confirm('确定删除吗？')) return;
-
-      maps = maps.filter(m => m.id !== id);
-      if (currentId === id) {
-        currentId = maps.length > 0 ? maps[0].id : null;
-        mdEl.value = currentId ? (maps.find(m => m.id === currentId)?.content || '') : '';
-      }
-
-      saveToLocal();
-      refreshList();
-      render();
-    }
-
-    function refreshList() {
-      const listEl = document.getElementById('history-list');
-      listEl.innerHTML = maps.map(m => `
-        <li class="history-item ${m.id === currentId ? 'active' : ''}" onclick="loadMap(${m.id})">
-          <span>${m.title}</span>
-          <span class="delete-btn" onclick="deleteMap(event, ${m.id})">×</span>
-        </li>
-      `).join('');
-    }
-
-    function downloadImage() {
-      alert("提示：请使用浏览器的‘打印’功能保存为PDF，或使用截图工具。");
-    }
-
-    mdEl.addEventListener('input', render);
-    mdEl.addEventListener('scroll', () => {
-      lineNoEl.scrollTop = mdEl.scrollTop;
-    });
+<script>
+    // Supabase 配置保持不变
+    const S_URL = 'https://kwxyzfgbyfhxvznfgatc.supabase.co';
+    const S_KEY = 'sb_publishable_jSCVnWKOb8HEAT9uZdhWLg_lQJyua8N';
+    const db = supabase.createClient(S_URL, S_KEY);
+    let curArt = null;
 
     window.onload = () => {
-      if (maps.length === 0) createNew();
-      else loadMap(maps[0].id);
+        updateTime(); setInterval(updateTime, 1000);
+        checkDB(); initCalendar();
+        const savedBg = localStorage.getItem('userClockBg');
+        if(savedBg) document.getElementById('clock-bg').style.backgroundImage = `url('${savedBg}')`;
     };
-  </script>
+
+    function updateTime() {
+        const n = new Date();
+        document.getElementById('big-time').innerText = n.toLocaleTimeString('zh-CN', {hour12:false, hour:'2-digit', minute:'2-digit'});
+        document.getElementById('big-date').innerText = n.toLocaleDateString('zh-CN', {year:'numeric', month:'long', day:'numeric'});
+    }
+
+    function changeClockBg() {
+        const url = prompt("请输入图片链接：");
+        if(url && url.startsWith('http')) {
+            document.getElementById('clock-bg').style.backgroundImage = `url('${url}')`;
+            localStorage.setItem('userClockBg', url);
+        }
+    }
+
+    async function checkDB() {
+        const { error } = await db.from('articles').select('id').limit(1);
+        if(!error) { document.getElementById('conn-tag').innerText = '✅ 云端在线'; document.getElementById('conn-tag').style.color = 'green'; }
+    }
+
+    function showP(id, btn) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('p-'+id).classList.add('active');
+        if(btn) {
+            document.querySelectorAll('.nav-menu li').forEach(l => l.classList.remove('active'));
+            btn.classList.add('active');
+        }
+        if(id === 'list') loadList();
+        if(id === 'album') loadAlbum();
+    }
+
+    async function initCalendar() {
+        const grid = document.getElementById('cal-grid'); grid.innerHTML = '';
+        const { data: notes } = await db.from('calendar').select('*');
+        for(let i=1; i<=31; i++) {
+            const day = document.createElement('div');
+            day.className = 'cal-day neu-card';
+            const noteData = notes?.find(n => n.day == i);
+            if(noteData && noteData.note) day.classList.add('has-note');
+            day.innerText = i;
+            day.onclick = async () => {
+                const head = noteData ? `[日程]：${noteData.note}` : "暂无日程";
+                const newNote = prompt(`${head}\n\n修改日程：`, noteData?.note || "");
+                if(newNote !== null) {
+                    await db.from('calendar').upsert({ day: i, note: newNote }, { onConflict: 'day' });
+                    initCalendar();
+                }
+            };
+            grid.appendChild(day);
+        }
+    }
+
+    async function loadList() {
+        const { data } = await db.from('articles').select('*').order('created_at', {ascending:false});
+        document.getElementById('article-list-area').innerHTML = data?.map(a => `
+            <div class="neu-card" style="margin-bottom:15px; cursor:pointer;" onclick='viewArt(${JSON.stringify(a).replace(/'/g, "&apos;")})'>
+                <strong>${a.title}</strong>
+                <div style="font-size:12px; color:#888; margin-top:5px;">${new Date(a.created_at).toLocaleDateString()}</div>
+            </div>
+        `).join('') || '暂无内容';
+    }
+
+    function viewArt(art) {
+        curArt = art;
+        document.getElementById('v-title').innerText = art.title;
+        document.getElementById('v-diff-content').innerHTML = buildDiff(art.original_content, art.corrected_content || art.original_content);
+        showP('view');
+    }
+
+    function goEdit() {
+        document.getElementById('e-title').value = curArt.title;
+        document.getElementById('e-orig').value = curArt.original_content;
+        document.getElementById('e-corr').value = curArt.corrected_content || curArt.original_content;
+        showP('edit');
+    }
+
+    function startNewArticle() {
+        curArt = null;
+        document.getElementById('e-title').value = '';
+        document.getElementById('e-orig').value = '';
+        document.getElementById('e-corr').value = '';
+        showP('edit');
+    }
+
+    async function submitArticle() {
+        const title = document.getElementById('e-title').value;
+        const orig = document.getElementById('e-orig').value;
+        const corr = document.getElementById('e-corr').value;
+        if(curArt) {
+            await db.from('articles').update({ title, original_content: orig, corrected_content: corr }).eq('id', curArt.id);
+        } else {
+            await db.from('articles').insert([{ title, original_content: orig, corrected_content: corr }]);
+        }
+        alert("已同步至云端！");
+        showP('list');
+    }
+
+    // 核心对比算法 (LCS)
+    function buildDiff(oldStr, newStr) {
+        if (!newStr) return oldStr;
+        const a = Array.from(oldStr), b = Array.from(newStr);
+        const n = a.length, m = b.length;
+        const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+        for (let i = n - 1; i >= 0; i--) {
+            for (let j = m - 1; j >= 0; j--) {
+                if (a[i] === b[j]) dp[i][j] = dp[i + 1][j + 1] + 1;
+                else dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+            }
+        }
+        let i = 0, j = 0, html = "";
+        while (i < n && j < m) {
+            if (a[i] === b[j]) { html += a[i]; i++; j++; }
+            else if (dp[i + 1][j] >= dp[i][j + 1]) { html += `<span class="diff-del">${a[i]}</span>`; i++; }
+            else { html += `<span class="diff-add">${b[j]}</span>`; j++; }
+        }
+        while (i < n) { html += `<span class="diff-del">${a[i]}</span>`; i++; }
+        while (j < m) { html += `<span class="diff-add">${b[j]}</span>`; j++; }
+        return html;
+    }
+
+    async function loadAlbum() {
+        const { data } = await db.from('photos').select('*').order('created_at', {ascending:false});
+        document.getElementById('album-grid').innerHTML = data?.map(p => `<img src="${p.url}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:15px; box-shadow:4px 4px 8px var(--shadow-dark);">`).join('');
+    }
+
+    async function doUpload(input) {
+        for(let f of input.files) {
+            const r = new FileReader();
+            r.onload = async (e) => {
+                await db.from('photos').insert([{ url: e.target.result }]);
+                loadAlbum();
+            };
+            r.readAsDataURL(f);
+        }
+    }
+</script>
 </body>
 </html>
